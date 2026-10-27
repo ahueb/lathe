@@ -355,6 +355,33 @@ Two Anthropic sources lathe does not cite were read in full and are used above: 
 | `README.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/` | documentation | every factual claim checked against code, history or docs (L3, L4) |
 | `.allowed_signers`, `.gitattributes`, `.gitignore`, `CODEOWNERS`, `LICENSE`, marketplace manifest | metadata | tag verification; ignored paths (`docs/plans/`, eval results) |
 
+## Addendum: does lathe meet its efficiency objective?
+
+**The objective, verbatim.** `context/CLAUDE.md` line 5: "Maximize fully correct accepted work per unit of model usage and wall-clock time. Optimize completed work, not raw token price, model prestige, number of agents, or lines generated." Line 37 adds "the smallest coherent change", and README line 3 says the agents "route each job to the cheapest model that can do it". Fewest lines of code is not itself a stated goal: the policy says not to optimise "lines generated".
+
+**Verdict: not demonstrated, and the repository's own data leans against it for model usage.** No valid measurement compares correct work or cost with and without the plugin. Every behaviour measurement ran with `--ablation none`, which turns off `claude plugin eval`'s built-in without-plugin arm (M7). The objective has therefore never been measured.
+
+**Correctness.**
+- 10 of 23 components (12 skills, 11 agents) have at least one shipped eval case.
+- 13 have none: browser-testing, checkpoint, change-eval, docs-check, literature-review, deep-audit, verification-loop, scout, test-triage, architect, semantic-reviewer, browser-tester and the deep-audit auditor.
+- The evaluated ones mostly pass, after the adjudication described in M7.
+- The defects this audit found sit in the enforcement features: the guard (M1, M4, L1), tool boundaries (M2, L2), the Windows hook (M3) and the installer (M9, L5).
+
+**Lines of code.**
+- The plugin's runtime is small: about 2,900 lines, mostly prompt text, and much of it is loaded only when a skill runs.
+- About 6,500 of the repository's 23,614 lines (28%) serve the installer: `install.sh` and helpers 2,542, their unit tests about 2,000, `ci.sh` install scenarios about 1,400, CLI shims about 560.
+- README line 34 says the native two-command marketplace install also works. The installer's additions over it are settings that raise usage (below) and a backup and rollback layer with defects (M9, L5).
+
+**Model usage.**
+- **Fixed context cost is small.** By byte count (3.5–4 bytes per token, no tokenizer available), lathe adds about 4.5–5.1K tokens per session: a 12.2 KB policy, 4.3 KB of skill listings and 1.5 KB of agent listings. The default install adds about 1.6–1.9K more: superpowers' 3.2 KB session injection and 2.3 KB of listings, plus about 1 KB from the other default plugins. MCP tool definitions are deferred by default.
+- **About half the policy (49%) is avoidable always-loaded text.** 1.9 KB overrides superpowers, which the installer itself installs, and 4.0 KB is an agent roster that partly repeats the agent listing.
+- **The largest lever raises usage without measurement.** The current models already default to the larger tier on subscription and API plans, and their documented default effort is `medium`. `settings.recommended.json` raises the main session, where the policy keeps most work, to `xhigh`. Claude Code's effort guidance says "for most tasks you should use the model's default effort level". Lathe's own per-agent effort measurements kept `medium` wherever `high` "bought nothing" or cost 23% more for small gains, but no measurement covers the main session's `xhigh`.
+- **Counter-evidence.** The same guidance says Claude "generally won't artificially inflate usage for simple tasks at higher effort levels", so the extra cost of `xhigh` is concentrated in harder tasks, and it may buy correctness. Neither direction is measured.
+- **Fan-out costs more on lathe's own fixtures.** `plan-execution` fanned out in 14 runs at a mean of $0.845 and 181 s. The 4 runs that did not averaged $0.168 and 70 s, and 3 of those 4 produced the same diff size with passing tests (M8). The protocol counts runs without fan-out as invalid, so it cannot test whether fan-out pays. Anthropic's article "Building agents: When to fold subagents into your main agent loop" (2026-10-22) reports that a single agent with skills "frequently outperformed … the subagent design on quality, and often at a lower cost and latency per task". It keeps subagents for context bloat or parallel work with throwaway context. Policy lines 22–24 follow that; `plan-execution` and the readiness review's fan-out do not.
+- **Practices that do match platform cost guidance:** deterministic checks before model review, targeted reads, no automatic second review, terse reviewer output, `test-triage` and `scout` on the smaller tier at `low` effort, and code-intelligence plugins, which the Claude Code costs page recommends for cutting file reads.
+
+**What would settle it.** Run `claude plugin eval --ablation with-without` on a fixed set of ordinary coding tasks that lathe was not tuned on. Compare pass rate and cost per run for (a) no plugin, (b) lathe with platform-default effort, and (c) lathe as recommended. Then measure `plan-execution` against a single-agent run on plans large enough to parallelise.
+
 ## Reproduction notes
 
 Every reproduction ran in a scratch directory outside the repository. Minimal forms:
